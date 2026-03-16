@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from worktree.models import ExecutionGraph, RunConfig, TaskNode, TaskStatus
-from worktree.state import StateManager
+from shard.models import ExecutionGraph, RunConfig, TaskNode, TaskStatus
+from shard.state import StateManager
 
 
 class TestStateManager:
@@ -18,10 +18,10 @@ class TestStateManager:
     def test_initialize_creates_dirs(self, tmp_path: Path) -> None:
         state = StateManager(tmp_path, self.run_id)
         state.initialize()
-        assert (tmp_path / ".worktree" / "journal").is_dir()
-        assert (tmp_path / ".worktree" / "prompts").is_dir()
-        assert (tmp_path / ".worktree" / "logs").is_dir()
-        assert (tmp_path / ".worktree" / "checkpoints").is_dir()
+        assert (tmp_path / ".shard" / "journal").is_dir()
+        assert (tmp_path / ".shard" / "prompts").is_dir()
+        assert (tmp_path / ".shard" / "logs").is_dir()
+        assert (tmp_path / ".shard" / "checkpoints").is_dir()
 
     def test_save_and_load_graph(self, tmp_path: Path) -> None:
         state = StateManager(tmp_path, self.run_id)

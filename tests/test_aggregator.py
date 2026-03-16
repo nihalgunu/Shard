@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from worktree.aggregator import Aggregator, SelfHealingLoop
-from worktree.models import (
+from shard.aggregator import Aggregator, SelfHealingLoop
+from shard.models import (
     ExecutionGraph,
     RunConfig,
     TaskNode,

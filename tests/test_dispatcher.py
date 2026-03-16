@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from worktree.dispatcher import (
+from shard.dispatcher import (
     AiderProvider,
     ClaudeCodeProvider,
     CustomProvider,
     get_provider,
 )
-from worktree.models import TaskNode, TaskStatus
+from shard.models import TaskNode, TaskStatus
 
 
 class TestClaudeCodeProvider:

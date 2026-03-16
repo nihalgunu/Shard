@@ -9,9 +9,9 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from worktree.config import is_barrel_file, is_structural_file
-from worktree.git_manager import GitManager
-from worktree.models import (
+from shard.config import is_barrel_file, is_structural_file
+from shard.git_manager import GitManager
+from shard.models import (
     ExecutionGraph,
     MergeConflict,
     RunStatus,
@@ -19,8 +19,8 @@ from worktree.models import (
     TaskStatus,
     TaskTestResult,
 )
-from worktree.planner import topological_sort
-from worktree.state import StateManager
+from shard.planner import topological_sort
+from shard.state import StateManager
 
 logger = logging.getLogger(__name__)
 

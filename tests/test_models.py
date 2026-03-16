@@ -1,4 +1,4 @@
-"""Tests for WorkTree data models."""
+"""Tests for Shard data models."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from worktree.models import (
+from shard.models import (
     AgentBackend,
     Collision,
     ExecutionGraph,

@@ -9,7 +9,7 @@ build/
 .venv/
 venv/
 .env
-.worktree/
+.shard/
 *.log
 .pytest_cache/
 .mypy_cache/

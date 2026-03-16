@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from worktree.config import (
+from shard.config import (
     is_barrel_file,
     is_structural_file,
     load_config,
 )
-from worktree.models import AgentBackend
+from shard.models import AgentBackend
 
 
 class TestLoadConfig:
@@ -56,7 +56,7 @@ args = ["-v", "--tb=long"]
 level = "DEBUG"
 format = "text"
 """
-        (tmp_path / "worktree.toml").write_text(toml_content)
+        (tmp_path / "shard.toml").write_text(toml_content)
         config = load_config(tmp_path)
         assert config.agent_backend == AgentBackend.AIDER
         assert config.agent_binary == "/usr/bin/aider"

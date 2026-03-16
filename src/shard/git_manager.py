@@ -7,7 +7,7 @@ import logging
 import shutil
 from pathlib import Path
 
-from worktree.models import ExecutionGraph, MergeConflict, TaskNode
+from shard.models import ExecutionGraph, MergeConflict, TaskNode
 
 logger = logging.getLogger(__name__)
 

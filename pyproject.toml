@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "worktree"
+name = "shard-ai"
 version = "1.0.0rc1"
 description = "A TDD-Driven, Parallelized AI Coding Orchestrator"
 readme = "README.md"
@@ -44,10 +44,10 @@ dev = [
 ]
 
 [project.scripts]
-worktree = "worktree.cli:main"
+shard = "shard.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/worktree"]
+packages = ["src/shard"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

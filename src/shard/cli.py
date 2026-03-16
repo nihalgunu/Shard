@@ -1,4 +1,4 @@
-"""CLI interface for WorkTree."""
+"""CLI interface for Shard."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from worktree.config import load_config, save_config
-from worktree.models import RunStatus, TaskStatus
-from worktree.orchestrator import Orchestrator
-from worktree.state import StateManager
+from shard.config import load_config, save_config
+from shard.models import RunStatus, TaskStatus
+from shard.orchestrator import Orchestrator
+from shard.state import StateManager
 
 console = Console()
 
@@ -47,9 +47,9 @@ def get_repo_root() -> Path:
 
 
 @click.group()
-@click.version_option(version="1.0.0rc1", prog_name="worktree")
+@click.version_option(version="1.0.0rc1", prog_name="shard")
 def main() -> None:
-    """WorkTree: A TDD-Driven, Parallelized AI Coding Orchestrator."""
+    """Shard: A TDD-Driven, Parallelized AI Coding Orchestrator."""
     pass
 
 
@@ -80,7 +80,7 @@ def run(prompt: str | None, prompt_file: str | None, agents: int | None,
     if agents is not None:
         config.max_agents = agents
     if backend is not None:
-        from worktree.models import AgentBackend
+        from shard.models import AgentBackend
         config.agent_backend = AgentBackend(backend)
     if timeout is not None:
         config.global_timeout_s = timeout
@@ -90,7 +90,7 @@ def run(prompt: str | None, prompt_file: str | None, agents: int | None,
     setup_logging(config.log_level, config.log_format)
 
     orchestrator = Orchestrator(repo_root, config)
-    console.print(f"[bold]WorkTree[/bold] starting run [cyan]{orchestrator.run_id}[/cyan]")
+    console.print(f"[bold]Shard[/bold] starting run [cyan]{orchestrator.run_id}[/cyan]")
 
     graph = asyncio.run(orchestrator.run(prompt))
 
@@ -137,7 +137,7 @@ def plan(prompt: str, agents: int | None) -> None:
         )
 
     console.print(table)
-    console.print(f"\nDAG saved to .worktree/graph.json")
+    console.print(f"\nDAG saved to .shard/graph.json")
 
 
 @main.command()
@@ -166,10 +166,10 @@ def resume(run_id: str) -> None:
 def status(run_id: str | None) -> None:
     """Show the current state of the execution graph."""
     repo_root = get_repo_root()
-    state_dir = repo_root / ".worktree"
+    state_dir = repo_root / ".shard"
 
     if not state_dir.exists():
-        console.print("[yellow]No WorkTree state found in this repository.[/yellow]")
+        console.print("[yellow]No Shard state found in this repository.[/yellow]")
         return
 
     graph_path = state_dir / "graph.json"
@@ -177,7 +177,7 @@ def status(run_id: str | None) -> None:
         console.print("[yellow]No execution graph found.[/yellow]")
         return
 
-    from worktree.models import ExecutionGraph
+    from shard.models import ExecutionGraph
     with open(graph_path) as f:
         data = json.load(f)
     graph = ExecutionGraph.from_dict(data)
@@ -272,11 +272,11 @@ def clean(run_id: str) -> None:
 
 @main.command("config")
 def show_config() -> None:
-    """Show or edit the worktree.toml configuration."""
+    """Show or edit the shard.toml configuration."""
     repo_root = get_repo_root()
     config = load_config(repo_root)
 
-    table = Table(title="WorkTree Configuration")
+    table = Table(title="Shard Configuration")
     table.add_column("Setting", style="cyan")
     table.add_column("Value")
 
@@ -285,9 +285,9 @@ def show_config() -> None:
 
     console.print(table)
 
-    config_path = repo_root / "worktree.toml"
+    config_path = repo_root / "shard.toml"
     if not config_path.exists():
-        console.print(f"\n[dim]No worktree.toml found. Using defaults. Run 'worktree config --init' to create one.[/dim]")
+        console.print(f"\n[dim]No shard.toml found. Using defaults. Run 'shard config --init' to create one.[/dim]")
 
 
 if __name__ == "__main__":

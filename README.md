@@ -2,23 +2,22 @@
 
 A TDD-driven, parallelized AI coding orchestrator that breaks down complex tasks and executes them concurrently using git worktrees.
 
-## Overview
-
-Shard takes a natural language prompt describing a coding task and:
-
-1. **Plans** - Generates a DAG (Directed Acyclic Graph) of sub-tasks with file ownership boundaries
-2. **Partitions** - Provisions isolated git worktrees for parallel execution
-3. **Dispatches** - Runs AI coding agents (Claude Code, Aider, Cursor CLI) concurrently on each task
-4. **Aggregates** - Merges all branches and resolves conflicts
-5. **Self-heals** - Runs tests and automatically fixes failures
-
 ## Installation
 
+### Homebrew (macOS)
+
 ```bash
-pip install worktree
+brew tap nihalgunu/shard
+brew install shard
 ```
 
-Or install from source:
+### pip
+
+```bash
+pip install shard-ai
+```
+
+### From source
 
 ```bash
 git clone https://github.com/nihalgunu/Shard.git
@@ -30,81 +29,63 @@ pip install -e ".[dev]"
 
 ```bash
 # Run a full pipeline
-worktree run -p "Add user authentication with JWT tokens and refresh token support"
+shard run -p "Add user authentication with JWT tokens"
 
-# Plan only (preview the DAG without executing)
-worktree plan -p "Refactor the database layer to use async operations"
+# Preview the execution plan without running
+shard plan -p "Refactor database layer to async"
 
-# Check status of a run
-worktree status
+# Check status
+shard status
 
 # Resume an interrupted run
-worktree resume <run-id>
-
-# View logs for a specific task
-worktree logs <task-id>
+shard resume <run-id>
 ```
-
-## Configuration
-
-Create a `worktree.toml` in your repository root:
-
-```toml
-[worktree]
-max_agents = 4
-agent_backend = "claude-code"  # or "aider", "cursor-cli", "custom"
-global_timeout_s = 3600
-max_cost_usd = 10.0
-max_retries_per_task = 2
-max_retries_global = 3
-auto_cleanup = true
-```
-
-## CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `worktree run` | Execute a full pipeline run |
-| `worktree plan` | Generate DAG and test scaffold without executing |
-| `worktree resume` | Resume an interrupted run |
-| `worktree status` | Show execution graph status |
-| `worktree logs` | View agent stdout/stderr |
-| `worktree abort` | Terminate all agents and mark run as aborted |
-| `worktree clean` | Remove worktrees, branches, and artifacts |
-| `worktree config` | Show current configuration |
 
 ## How It Works
 
-### Stage 1: Planning (Architect)
-An LLM analyzes your prompt and codebase to generate:
-- A DAG of independent tasks with dependencies
-- File ownership assignments (each file owned by exactly one task)
-- Test scaffolds for TDD-style development
+Shard takes a natural language prompt and:
 
-### Stage 2: Partitioning
-For each task node, Shard provisions an isolated git worktree branched from a common scaffold commit.
+1. **Plans** - Generates a DAG of sub-tasks with file ownership boundaries
+2. **Partitions** - Provisions isolated git worktrees for parallel execution
+3. **Dispatches** - Runs AI agents concurrently on each task
+4. **Aggregates** - Merges all branches and resolves conflicts
+5. **Self-heals** - Runs tests and automatically fixes failures
 
-### Stage 3: Dispatching
-Tasks are dispatched to AI coding agents respecting:
-- DAG dependencies (topological order)
-- Concurrency limits
-- Per-task timeouts
-- Cost budgets
+## Configuration
 
-### Stage 4: Aggregation
-Completed task branches are merged in topological order into a staging branch. File ownership boundaries prevent merge conflicts.
+Create `shard.toml` in your repository:
 
-### Stage 5: Self-Healing
-Tests run on the merged result. If failures occur, Shard enters a healing loop that:
-- Identifies failing tests
-- Dispatches fix attempts
-- Retries up to the configured limit
+```toml
+[agent]
+backend = "claude-code"  # or "aider", "cursor-cli"
+max_concurrent = 4
+
+[cost]
+max_usd = 10.0
+
+[retries]
+max_per_task = 3
+max_global = 5
+```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `shard run` | Execute a full pipeline |
+| `shard plan` | Preview execution DAG |
+| `shard resume` | Resume interrupted run |
+| `shard status` | Show current status |
+| `shard logs` | View agent output |
+| `shard abort` | Stop all agents |
+| `shard clean` | Remove artifacts |
+| `shard config` | Show configuration |
 
 ## Requirements
 
 - Python 3.11+
 - Git 2.20+
-- An AI coding agent (Claude Code, Aider, or Cursor CLI)
+- AI coding agent (Claude Code, Aider, or Cursor CLI)
 
 ## License
 

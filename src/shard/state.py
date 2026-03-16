@@ -11,7 +11,7 @@ from typing import Any
 
 import msgpack
 
-from worktree.models import ExecutionGraph, TaskNode, TaskStatus
+from shard.models import ExecutionGraph, TaskNode, TaskStatus
 
 
 class StateManager:
@@ -20,7 +20,7 @@ class StateManager:
     def __init__(self, repo_root: Path, run_id: str) -> None:
         self.repo_root = repo_root
         self.run_id = run_id
-        self.state_dir = repo_root / ".worktree"
+        self.state_dir = repo_root / ".shard"
         self.journal_dir = self.state_dir / "journal"
         self.prompts_dir = self.state_dir / "prompts"
         self.logs_dir = self.state_dir / "logs"
@@ -29,7 +29,7 @@ class StateManager:
         self._journal_seq = 0
 
     def initialize(self) -> None:
-        """Create the .worktree directory structure."""
+        """Create the .shard directory structure."""
         for d in [self.journal_dir, self.prompts_dir, self.logs_dir, self.checkpoints_dir]:
             d.mkdir(parents=True, exist_ok=True)
 

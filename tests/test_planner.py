@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from worktree.models import ExecutionGraph, RunConfig, TaskNode, TaskStatus
-from worktree.planner import (
+from shard.models import ExecutionGraph, RunConfig, TaskNode, TaskStatus
+from shard.planner import (
     _extract_json,
     build_file_tree,
     compute_critical_path,

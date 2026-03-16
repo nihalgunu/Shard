@@ -1,4 +1,4 @@
-"""Data models for WorkTree execution graph and task nodes."""
+"""Data models for Shard execution graph and task nodes."""
 
 from __future__ import annotations
 

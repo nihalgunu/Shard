@@ -10,7 +10,7 @@ from typing import Any
 import jsonschema
 import networkx as nx
 
-from worktree.models import Collision, ExecutionGraph, RunConfig, TaskNode, TaskStatus
+from shard.models import Collision, ExecutionGraph, RunConfig, TaskNode, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -131,8 +131,8 @@ def _load_gitignore(repo_root: Path) -> list[str]:
 
 def _should_ignore(rel_path: str, name: str, patterns: list[str]) -> bool:
     """Basic gitignore-style check."""
-    # Always ignore .git and .worktree directories
-    if name in (".git", ".worktree", "__pycache__", "node_modules", ".venv", "venv"):
+    # Always ignore .git and .shard directories
+    if name in (".git", ".shard", "__pycache__", "node_modules", ".venv", "venv"):
         return True
     for pattern in patterns:
         clean = pattern.rstrip("/")

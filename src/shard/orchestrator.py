@@ -9,26 +9,26 @@ from typing import Any
 
 import ulid
 
-from worktree.aggregator import Aggregator, SelfHealingLoop
-from worktree.config import load_config
-from worktree.dispatcher import Dispatcher, get_provider
-from worktree.git_manager import GitManager
-from worktree.models import (
+from shard.aggregator import Aggregator, SelfHealingLoop
+from shard.config import load_config
+from shard.dispatcher import Dispatcher, get_provider
+from shard.git_manager import GitManager
+from shard.models import (
     ExecutionGraph,
     RunConfig,
     RunStatus,
     TaskNode,
     TaskStatus,
 )
-from worktree.planner import (
+from shard.planner import (
     detect_collisions,
     invoke_planner,
     resolve_collisions_by_serialization,
     topological_sort,
     validate_acyclicity,
 )
-from worktree.state import StateManager
-from worktree.tui import WorkTreeTUI
+from shard.state import StateManager
+from shard.tui import ShardTUI
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ class Orchestrator:
         self.state = StateManager(self.repo_root, self.run_id)
         self.git = GitManager(self.repo_root, self.config.worktree_dir)
         self.graph: ExecutionGraph | None = None
-        self.tui: WorkTreeTUI | None = None
+        self.tui: ShardTUI | None = None
 
     async def run(self, prompt: str, plan_only: bool = False) -> ExecutionGraph:
         """Execute the full pipeline for a given prompt."""
@@ -247,7 +247,7 @@ class Orchestrator:
         )
 
         # Set up TUI
-        self.tui = WorkTreeTUI(self.graph)
+        self.tui = ShardTUI(self.graph)
 
         def on_output(task_id: str, line: str) -> None:
             if self.tui:

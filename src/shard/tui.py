@@ -13,7 +13,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from worktree.models import ExecutionGraph, TaskNode, TaskStatus
+from shard.models import ExecutionGraph, TaskNode, TaskStatus
 
 # Color mapping for task statuses
 STATUS_COLORS: dict[TaskStatus, str] = {
@@ -28,8 +28,8 @@ STATUS_COLORS: dict[TaskStatus, str] = {
 }
 
 
-class WorkTreeTUI:
-    """Rich-based terminal UI for monitoring WorkTree execution."""
+class ShardTUI:
+    """Rich-based terminal UI for monitoring Shard execution."""
 
     def __init__(self, graph: ExecutionGraph) -> None:
         self.graph = graph
@@ -147,7 +147,7 @@ class WorkTreeTUI:
 
         return Panel(
             layout,
-            title=f"[bold]WorkTree v1.0.0[/bold]",
+            title=f"[bold]Shard v1.0.0[/bold]",
             border_style="blue",
         )
 

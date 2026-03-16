@@ -1,4 +1,4 @@
-"""Configuration loading from worktree.toml."""
+"""Configuration loading from shard.toml."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from worktree.models import RunConfig
+from shard.models import RunConfig
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -19,7 +19,7 @@ except ImportError:
     tomli_w = None  # type: ignore[assignment]
 
 
-DEFAULT_CONFIG_NAME = "worktree.toml"
+DEFAULT_CONFIG_NAME = "shard.toml"
 
 # Structural files that get special merge handling
 STRUCTURAL_FILES = {
@@ -43,7 +43,7 @@ BARREL_PATTERNS = {"__init__.py", "index.ts", "index.js", "mod.rs"}
 
 
 def load_config(repo_root: Path) -> RunConfig:
-    """Load RunConfig from worktree.toml in the repo root."""
+    """Load RunConfig from shard.toml in the repo root."""
     config_path = repo_root / DEFAULT_CONFIG_NAME
     if not config_path.exists():
         return RunConfig()
@@ -106,7 +106,7 @@ def load_config(repo_root: Path) -> RunConfig:
 
 
 def save_config(repo_root: Path, config: RunConfig) -> None:
-    """Save RunConfig to worktree.toml."""
+    """Save RunConfig to shard.toml."""
     if tomli_w is None:
         raise RuntimeError("tomli_w is required to save configuration. Install it with: pip install tomli-w")
 

@@ -10,9 +10,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from worktree.models import ExecutionGraph, RunStatus, TaskNode, TaskStatus
-from worktree.planner import topological_sort
-from worktree.state import StateManager
+from shard.models import ExecutionGraph, RunStatus, TaskNode, TaskStatus
+from shard.planner import topological_sort
+from shard.state import StateManager
 
 logger = logging.getLogger(__name__)
 
