@@ -10,7 +10,12 @@ from pathlib import Path
 
 import click
 from rich.console import Console
+from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.syntax import Syntax
 from rich.table import Table
+from rich.text import Text
+from rich.tree import Tree
 
 from shard.config import load_config, save_config
 from shard.models import RunStatus, TaskStatus
@@ -18,6 +23,21 @@ from shard.orchestrator import Orchestrator
 from shard.state import StateManager
 
 console = Console()
+
+BANNER = """[bold cyan]
+   _____ _                   _
+  / ____| |                 | |
+ | (___ | |__   __ _ _ __ __| |
+  \\___ \\| '_ \\ / _` | '__/ _` |
+  ____) | | | | (_| | | | (_| |
+ |_____/|_| |_|\\__,_|_|  \\__,_|[/bold cyan]
+[dim]  TDD-Driven Parallel AI Orchestrator[/dim]
+"""
+
+
+def print_banner() -> None:
+    """Print the Shard banner."""
+    console.print(BANNER)
 
 
 def setup_logging(level: str = "INFO", fmt: str = "json") -> None:
@@ -46,8 +66,97 @@ def get_repo_root() -> Path:
     raise click.ClickException("Not inside a git repository")
 
 
-@click.group()
-@click.version_option(version="1.0.1", prog_name="shard")
+def print_error(message: str, suggestion: str | None = None) -> None:
+    """Print an error in a styled panel."""
+    content = f"[bold red]{message}[/bold red]"
+    if suggestion:
+        content += f"\n\n[dim]{suggestion}[/dim]"
+    console.print(Panel(content, title="[red]Error[/red]", border_style="red"))
+
+
+def print_success(message: str) -> None:
+    """Print a success message in a styled panel."""
+    console.print(Panel(f"[bold green]{message}[/bold green]", border_style="green"))
+
+
+def build_dag_tree(graph) -> Tree:
+    """Build a Rich Tree visualization of the execution DAG."""
+    tree = Tree(
+        f"[bold cyan]Execution Plan[/bold cyan] [dim]({graph.run_id})[/dim]",
+        guide_style="dim"
+    )
+
+    # Build dependency map
+    task_nodes = {node.task_id: node for node in graph.nodes}
+
+    # Find root tasks (no dependencies)
+    roots = [n for n in graph.nodes if not n.depends_on]
+
+    def add_node(parent_tree: Tree, node) -> None:
+        # Status indicator
+        status_icons = {
+            "PENDING": "[dim]○[/dim]",
+            "QUEUED": "[yellow]◐[/yellow]",
+            "RUNNING": "[blue]◑[/blue]",
+            "COMPLETED": "[green]●[/green]",
+            "FAILED": "[red]✗[/red]",
+            "TIMED_OUT": "[red]⏱[/red]",
+        }
+        icon = status_icons.get(node.status.value, "○")
+
+        # Build node label
+        deps_str = ""
+        if node.depends_on:
+            deps_str = f" [dim](← {', '.join(node.depends_on)})[/dim]"
+
+        label = f"{icon} [bold]{node.task_id}[/bold]: {node.title}{deps_str}"
+        branch = parent_tree.add(label)
+
+        # Add files
+        for f in node.owned_files:
+            branch.add(f"[dim]📄 {f}[/dim]")
+        for t in node.test_files:
+            branch.add(f"[dim]🧪 {t}[/dim]")
+
+    # Add all nodes (flat structure with dependency indicators)
+    for node in graph.nodes:
+        add_node(tree, node)
+
+    return tree
+
+
+class RichGroup(click.Group):
+    """Custom Click group that shows a banner."""
+
+    def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        console.print(BANNER)
+        console.print("[bold]Usage:[/bold] shard [OPTIONS] COMMAND [ARGS]...\n")
+        console.print("[bold]Commands:[/bold]")
+
+        commands = [
+            ("run", "Execute a full pipeline run", "green"),
+            ("plan", "Generate DAG without executing", "cyan"),
+            ("status", "Show current execution state", "blue"),
+            ("resume", "Resume an interrupted run", "yellow"),
+            ("logs", "View agent logs for a task", "magenta"),
+            ("abort", "Terminate all running agents", "red"),
+            ("clean", "Remove artifacts for a run", "dim"),
+            ("config", "Show configuration", "dim"),
+        ]
+
+        table = Table(show_header=False, box=None, padding=(0, 2))
+        table.add_column(style="cyan", width=12)
+        table.add_column()
+
+        for cmd, desc, style in commands:
+            table.add_row(cmd, f"[{style}]{desc}[/{style}]")
+
+        console.print(table)
+        console.print("\n[dim]Run 'shard COMMAND --help' for more info on a command.[/dim]")
+
+
+@click.group(cls=RichGroup)
+@click.version_option(version="1.0.2", prog_name="shard")
 def main() -> None:
     """Shard: A TDD-Driven, Parallelized AI Coding Orchestrator."""
     pass
@@ -66,7 +175,11 @@ def run(prompt: str | None, prompt_file: str | None, agents: int | None,
         max_cost: float | None) -> None:
     """Execute a full pipeline run."""
     if not prompt and not prompt_file:
-        raise click.ClickException("Either --prompt or --prompt-file is required")
+        print_error(
+            "Missing prompt",
+            "Provide a prompt with --prompt or --prompt-file"
+        )
+        sys.exit(1)
 
     if prompt_file:
         with open(prompt_file) as f:
@@ -90,23 +203,43 @@ def run(prompt: str | None, prompt_file: str | None, agents: int | None,
 
     setup_logging(config.log_level, config.log_format)
 
+    print_banner()
     orchestrator = Orchestrator(repo_root, config)
-    console.print(f"[bold]Shard[/bold] starting run [cyan]{orchestrator.run_id}[/cyan]")
+
+    console.print(f"[bold]Run ID:[/bold] [cyan]{orchestrator.run_id}[/cyan]")
+    console.print(f"[bold]Backend:[/bold] {config.agent_backend.value}")
+    console.print(f"[bold]Max Agents:[/bold] {config.max_agents}")
+    console.print()
 
     try:
         graph = asyncio.run(orchestrator.run(prompt))
     except KeyboardInterrupt:
-        console.print("\n[yellow]Interrupted by user. Run 'shard resume' to continue.[/yellow]")
+        console.print()
+        console.print(Panel(
+            f"[yellow]Interrupted by user[/yellow]\n\n"
+            f"Resume with: [bold]shard resume {orchestrator.run_id}[/bold]",
+            title="[yellow]Paused[/yellow]",
+            border_style="yellow"
+        ))
         sys.exit(130)
     except Exception as e:
-        console.print(f"[bold red]Error:[/bold red] {e}")
+        print_error(str(e))
         sys.exit(1)
 
     if graph.status == RunStatus.COMPLETED:
-        console.print("[bold green]Pipeline completed successfully![/bold green]")
+        # Show summary
+        completed = sum(1 for n in graph.nodes if n.status == TaskStatus.COMPLETED)
+        total_duration = sum(n.duration_s or 0 for n in graph.nodes)
+
+        console.print()
+        print_success(
+            f"Pipeline completed!\n\n"
+            f"[dim]Tasks:[/dim] {completed}/{len(graph.nodes)}\n"
+            f"[dim]Duration:[/dim] {total_duration:.1f}s"
+        )
         sys.exit(0)
     else:
-        console.print(f"[bold red]Pipeline finished with status: {graph.status.value}[/bold red]")
+        print_error(f"Pipeline finished with status: {graph.status.value}")
         sys.exit(1)
 
 
@@ -121,36 +254,36 @@ def plan(prompt: str, agents: int | None) -> None:
         config.max_agents = agents
 
     setup_logging(config.log_level, config.log_format)
+    print_banner()
 
     orchestrator = Orchestrator(repo_root, config)
 
-    try:
-        graph = asyncio.run(orchestrator.run(prompt, plan_only=True))
-    except Exception as e:
-        console.print(f"[bold red]Error:[/bold red] {e}")
-        sys.exit(1)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        transient=True,
+        console=console,
+    ) as progress:
+        progress.add_task("Planning execution DAG...", total=None)
+        try:
+            graph = asyncio.run(orchestrator.run(prompt, plan_only=True))
+        except Exception as e:
+            print_error(str(e))
+            sys.exit(1)
 
-    # Display the DAG
-    table = Table(title=f"Execution Plan: {graph.run_id}")
-    table.add_column("Task ID", style="cyan")
-    table.add_column("Title")
-    table.add_column("Depends On")
-    table.add_column("Owned Files")
-    table.add_column("Test Files")
-    table.add_column("Priority", justify="right")
+    # Display the DAG as a tree
+    console.print()
+    tree = build_dag_tree(graph)
+    console.print(tree)
 
-    for node in graph.nodes:
-        table.add_row(
-            node.task_id,
-            node.title,
-            ", ".join(node.depends_on) or "-",
-            ", ".join(node.owned_files),
-            ", ".join(node.test_files),
-            str(node.priority),
-        )
-
-    console.print(table)
-    console.print(f"\nDAG saved to .shard/graph.json")
+    # Summary
+    console.print()
+    console.print(Panel(
+        f"[bold]{len(graph.nodes)}[/bold] tasks planned\n"
+        f"[dim]DAG saved to[/dim] .shard/graph.json",
+        title="[cyan]Plan Complete[/cyan]",
+        border_style="cyan"
+    ))
 
 
 @main.command()
@@ -161,26 +294,34 @@ def resume(run_id: str) -> None:
     config = load_config(repo_root)
     setup_logging(config.log_level, config.log_format)
 
+    print_banner()
     orchestrator = Orchestrator(repo_root, config, run_id=run_id)
-    console.print(f"[bold]Resuming run[/bold] [cyan]{run_id}[/cyan]")
+    console.print(f"[bold]Resuming:[/bold] [cyan]{run_id}[/cyan]\n")
 
     try:
         graph = asyncio.run(orchestrator.resume())
     except KeyboardInterrupt:
-        console.print("\n[yellow]Interrupted by user.[/yellow]")
+        console.print()
+        console.print(Panel(
+            "[yellow]Interrupted by user[/yellow]",
+            border_style="yellow"
+        ))
         sys.exit(130)
     except FileNotFoundError:
-        console.print(f"[bold red]Error:[/bold red] Run '{run_id}' not found. Check .shard/ directory.")
+        print_error(
+            f"Run '{run_id}' not found",
+            "Check .shard/ directory for available runs"
+        )
         sys.exit(1)
     except Exception as e:
-        console.print(f"[bold red]Error:[/bold red] {e}")
+        print_error(str(e))
         sys.exit(1)
 
     if graph.status == RunStatus.COMPLETED:
-        console.print("[bold green]Run completed successfully![/bold green]")
+        print_success("Run completed successfully!")
         sys.exit(0)
     else:
-        console.print(f"[bold red]Run finished with status: {graph.status.value}[/bold red]")
+        print_error(f"Run finished with status: {graph.status.value}")
         sys.exit(1)
 
 
@@ -192,12 +333,12 @@ def status(run_id: str | None) -> None:
     state_dir = repo_root / ".shard"
 
     if not state_dir.exists():
-        console.print("[yellow]No Shard state found in this repository.[/yellow]")
+        print_error("No Shard state found", "Run 'shard run' to start a pipeline")
         return
 
     graph_path = state_dir / "graph.json"
     if not graph_path.exists():
-        console.print("[yellow]No execution graph found.[/yellow]")
+        print_error("No execution graph found")
         return
 
     from shard.models import ExecutionGraph
@@ -206,41 +347,67 @@ def status(run_id: str | None) -> None:
     graph = ExecutionGraph.from_dict(data)
 
     if run_id and graph.run_id != run_id:
-        console.print(f"[yellow]Run {run_id} not found. Current run: {graph.run_id}[/yellow]")
+        print_error(f"Run {run_id} not found", f"Current run: {graph.run_id}")
         return
 
-    # Status colors
-    status_styles = {
-        "COMPLETED": "green",
-        "FAILED": "red",
-        "RUNNING": "blue",
-        "QUEUED": "yellow",
-        "PENDING": "dim",
-        "TIMED_OUT": "red",
-        "HEALING": "magenta",
-        "INTERRUPTED": "yellow",
+    # Status colors and icons
+    status_config = {
+        "PLANNING": ("blue", "📝"),
+        "PARTITIONING": ("cyan", "🔀"),
+        "DISPATCHING": ("yellow", "🚀"),
+        "MERGING": ("magenta", "🔗"),
+        "TESTING": ("blue", "🧪"),
+        "HEALING": ("magenta", "🩹"),
+        "COMPLETED": ("green", "✓"),
+        "FAILED": ("red", "✗"),
+        "INTERRUPTED": ("yellow", "⏸"),
+        "ABORTED": ("red", "⛔"),
     }
 
-    console.print(f"\n[bold]Run:[/bold] {graph.run_id}")
-    console.print(f"[bold]Status:[/bold] [{status_styles.get(graph.status.value, 'white')}]{graph.status.value}[/{status_styles.get(graph.status.value, 'white')}]")
-    console.print(f"[bold]Target:[/bold] {graph.target_branch}")
-    console.print(f"[bold]Retries:[/bold] {graph.global_retry_count}/{graph.config.max_retries_global}")
+    color, icon = status_config.get(graph.status.value, ("white", "?"))
+
+    # Header panel
+    header = Text()
+    header.append(f"{icon} ", style=color)
+    header.append(graph.status.value, style=f"bold {color}")
+
+    console.print(Panel(
+        f"[bold]Run:[/bold] [cyan]{graph.run_id}[/cyan]\n"
+        f"[bold]Status:[/bold] [{color}]{icon} {graph.status.value}[/{color}]\n"
+        f"[bold]Target:[/bold] {graph.target_branch}\n"
+        f"[bold]Retries:[/bold] {graph.global_retry_count}/{graph.config.max_retries_global}",
+        title="[bold]Shard Status[/bold]",
+        border_style="cyan"
+    ))
+
     console.print()
 
-    table = Table(title="Tasks")
-    table.add_column("Task ID", style="cyan")
+    # Task table
+    table = Table(title="Tasks", show_lines=True)
+    table.add_column("Task", style="cyan", no_wrap=True)
     table.add_column("Title")
-    table.add_column("Status")
+    table.add_column("Status", justify="center")
     table.add_column("Duration", justify="right")
-    table.add_column("Retries", justify="right")
+    table.add_column("Retries", justify="center")
+
+    task_status_icons = {
+        "PENDING": "[dim]○ PENDING[/dim]",
+        "QUEUED": "[yellow]◐ QUEUED[/yellow]",
+        "RUNNING": "[blue]◑ RUNNING[/blue]",
+        "COMPLETED": "[green]● DONE[/green]",
+        "FAILED": "[red]✗ FAILED[/red]",
+        "TIMED_OUT": "[red]⏱ TIMEOUT[/red]",
+        "HEALING": "[magenta]🩹 HEALING[/magenta]",
+        "INTERRUPTED": "[yellow]⏸ PAUSED[/yellow]",
+    }
 
     for node in graph.nodes:
-        style = status_styles.get(node.status.value, "white")
+        status_display = task_status_icons.get(node.status.value, node.status.value)
         duration = f"{node.duration_s:.1f}s" if node.duration_s else "-"
         table.add_row(
             node.task_id,
             node.title,
-            f"[{style}]{node.status.value}[/{style}]",
+            status_display,
             duration,
             f"{node.retry_count}/{graph.config.max_retries_per_task}",
         )
@@ -256,16 +423,29 @@ def logs(task_id: str) -> None:
     state = StateManager(repo_root, "")
     stdout_path, stderr_path = state.get_log_paths(task_id)
 
+    found = False
+
     if stdout_path.exists():
-        console.print(f"[bold]stdout ({stdout_path}):[/bold]")
-        console.print(stdout_path.read_text())
+        found = True
+        content = stdout_path.read_text()
+        console.print(Panel(
+            Syntax(content, "text", theme="monokai", line_numbers=True) if content else "[dim]Empty[/dim]",
+            title=f"[green]stdout[/green] [dim]({stdout_path})[/dim]",
+            border_style="green"
+        ))
 
     if stderr_path.exists():
-        console.print(f"\n[bold]stderr ({stderr_path}):[/bold]")
-        console.print(stderr_path.read_text())
+        found = True
+        content = stderr_path.read_text()
+        if content:
+            console.print(Panel(
+                Syntax(content, "text", theme="monokai", line_numbers=True),
+                title=f"[red]stderr[/red] [dim]({stderr_path})[/dim]",
+                border_style="red"
+            ))
 
-    if not stdout_path.exists() and not stderr_path.exists():
-        console.print(f"[yellow]No logs found for task {task_id}[/yellow]")
+    if not found:
+        print_error(f"No logs found for task {task_id}")
 
 
 @main.command()
@@ -276,9 +456,22 @@ def abort(run_id: str) -> None:
     config = load_config(repo_root)
 
     orchestrator = Orchestrator(repo_root, config, run_id=run_id)
-    asyncio.run(orchestrator.abort())
-    console.print(f"[bold yellow]Run {run_id} aborted.[/bold yellow]")
-    console.print("Worktrees and branches preserved for manual inspection.")
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        transient=True,
+        console=console,
+    ) as progress:
+        progress.add_task("Aborting run...", total=None)
+        asyncio.run(orchestrator.abort())
+
+    console.print(Panel(
+        f"Run [bold]{run_id}[/bold] aborted\n\n"
+        "[dim]Worktrees and branches preserved for inspection[/dim]",
+        title="[yellow]Aborted[/yellow]",
+        border_style="yellow"
+    ))
 
 
 @main.command()
@@ -289,28 +482,69 @@ def clean(run_id: str) -> None:
     config = load_config(repo_root)
 
     orchestrator = Orchestrator(repo_root, config, run_id=run_id)
-    asyncio.run(orchestrator.clean())
-    console.print(f"[bold green]Cleaned up run {run_id}[/bold green]")
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        transient=True,
+        console=console,
+    ) as progress:
+        progress.add_task("Cleaning up artifacts...", total=None)
+        asyncio.run(orchestrator.clean())
+
+    print_success(f"Cleaned up run {run_id}")
 
 
 @main.command("config")
-def show_config() -> None:
-    """Show or edit the shard.toml configuration."""
+@click.option("--init", is_flag=True, help="Create a default shard.toml file.")
+def show_config(init: bool) -> None:
+    """Show or initialize the shard.toml configuration."""
     repo_root = get_repo_root()
+    config_path = repo_root / "shard.toml"
+
+    if init:
+        if config_path.exists():
+            print_error("shard.toml already exists")
+            return
+        config = load_config(repo_root)
+        save_config(repo_root, config)
+        print_success(f"Created {config_path}")
+        return
+
     config = load_config(repo_root)
 
-    table = Table(title="Shard Configuration")
+    table = Table(title="[bold]Shard Configuration[/bold]", show_lines=True)
     table.add_column("Setting", style="cyan")
     table.add_column("Value")
 
-    for key, value in config.to_dict().items():
-        table.add_row(key, str(value))
+    # Group settings
+    groups = {
+        "Agent": ["agent_backend", "agent_binary", "max_agents", "stagger_delay_s"],
+        "Timeouts": ["per_task_timeout_s", "global_timeout_s", "output_stall_s", "commit_stall_s"],
+        "Retries": ["max_retries_per_task", "max_retries_global"],
+        "Cost": ["max_cost_usd", "warn_cost_usd"],
+        "Git": ["worktree_dir", "branch_prefix", "auto_cleanup"],
+        "Test": ["test_runner", "test_args", "test_json_report"],
+        "Logging": ["log_level", "log_format", "archive_agent_logs"],
+    }
+
+    config_dict = config.to_dict()
+
+    for group_name, keys in groups.items():
+        table.add_row(f"[bold]{group_name}[/bold]", "", end_section=False)
+        for key in keys:
+            if key in config_dict:
+                value = config_dict[key]
+                if isinstance(value, list):
+                    value = ", ".join(str(v) for v in value)
+                table.add_row(f"  {key}", str(value))
 
     console.print(table)
 
-    config_path = repo_root / "shard.toml"
     if not config_path.exists():
-        console.print(f"\n[dim]No shard.toml found. Using defaults. Run 'shard config --init' to create one.[/dim]")
+        console.print()
+        console.print("[dim]No shard.toml found. Using defaults.[/dim]")
+        console.print("[dim]Run 'shard config --init' to create one.[/dim]")
 
 
 if __name__ == "__main__":

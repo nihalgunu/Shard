@@ -1,6 +1,6 @@
 """Shard: A TDD-Driven, Parallelized AI Coding Orchestrator."""
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 from shard.models import (
     AgentBackend,
