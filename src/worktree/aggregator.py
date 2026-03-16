@@ -17,7 +17,7 @@ from worktree.models import (
     RunStatus,
     TaskNode,
     TaskStatus,
-    TestResult,
+    TaskTestResult,
 )
 from worktree.planner import topological_sort
 from worktree.state import StateManager
@@ -138,7 +138,7 @@ class Aggregator:
         """Resolve conflicts in barrel/index files via alphabetical union."""
         return await self._resolve_structural_conflict(staging_path, file_path)
 
-    async def run_tests(self, staging_path: Path) -> list[TestResult]:
+    async def run_tests(self, staging_path: Path) -> list[TaskTestResult]:
         """Run the test suite in the staging worktree."""
         self.graph.status = RunStatus.TESTING
         self.state.save_graph(self.graph)
@@ -156,7 +156,7 @@ class Aggregator:
         )
         stdout, stderr = await proc.communicate()
 
-        results: list[TestResult] = []
+        results: list[TaskTestResult] = []
 
         # Try to parse JSON report
         if self.graph.config.test_json_report:
@@ -169,12 +169,12 @@ class Aggregator:
         results = self._parse_text_output(stdout.decode(), stderr.decode())
         return results
 
-    def _parse_json_report(self, report_path: Path) -> list[TestResult]:
+    def _parse_json_report(self, report_path: Path) -> list[TaskTestResult]:
         """Parse pytest-json-report output."""
         with open(report_path) as f:
             report = json.load(f)
 
-        results: list[TestResult] = []
+        results: list[TaskTestResult] = []
         for test in report.get("tests", []):
             node_id = test.get("nodeid", "")
             parts = node_id.split("::")
@@ -186,7 +186,7 @@ class Aggregator:
                 call = test.get("call", {})
                 message = call.get("longrepr", "")
 
-            results.append(TestResult(
+            results.append(TaskTestResult(
                 test_name=node_id,
                 test_file=test_file,
                 passed=outcome == "passed",
@@ -195,27 +195,27 @@ class Aggregator:
             ))
         return results
 
-    def _parse_text_output(self, stdout: str, stderr: str) -> list[TestResult]:
+    def _parse_text_output(self, stdout: str, stderr: str) -> list[TaskTestResult]:
         """Fallback parser for text test output."""
-        results: list[TestResult] = []
+        results: list[TaskTestResult] = []
         combined = stdout + "\n" + stderr
         for line in combined.split("\n"):
             if "PASSED" in line:
-                results.append(TestResult(
+                results.append(TaskTestResult(
                     test_name=line.strip(), test_file="", passed=True
                 ))
             elif "FAILED" in line:
-                results.append(TestResult(
+                results.append(TaskTestResult(
                     test_name=line.strip(), test_file="", passed=False,
                     message=line.strip(),
                 ))
         return results
 
     def map_failures_to_tasks(
-        self, results: list[TestResult]
-    ) -> dict[str, list[TestResult]]:
+        self, results: list[TaskTestResult]
+    ) -> dict[str, list[TaskTestResult]]:
         """Map failing tests back to their owning task nodes."""
-        task_failures: dict[str, list[TestResult]] = {}
+        task_failures: dict[str, list[TaskTestResult]] = {}
         for result in results:
             if result.passed:
                 continue

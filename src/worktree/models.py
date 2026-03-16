@@ -311,7 +311,7 @@ class Collision:
 
 
 @dataclass
-class TestResult:
+class TaskTestResult:
     test_name: str
     test_file: str
     passed: bool

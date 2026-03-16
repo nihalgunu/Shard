@@ -14,7 +14,7 @@ from worktree.models import (
     RunStatus,
     TaskNode,
     TaskStatus,
-    TestResult,
+    TaskTestResult,
     TokenUsage,
 )
 
@@ -161,9 +161,9 @@ class TestCollision:
         assert d["overlapping_files"] == ["a.py", "b.py"]  # sorted
 
 
-class TestTestResult:
+class TestTaskTestResult:
     def test_to_dict(self) -> None:
-        r = TestResult(
+        r = TaskTestResult(
             test_name="test_foo", test_file="tests/test_foo.py",
             passed=False, message="assertion error", duration_s=0.5,
         )

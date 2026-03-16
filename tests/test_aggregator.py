@@ -13,7 +13,7 @@ from worktree.models import (
     RunConfig,
     TaskNode,
     TaskStatus,
-    TestResult,
+    TaskTestResult,
 )
 
 
@@ -39,12 +39,12 @@ class TestAggregator:
         aggregator = Aggregator(graph, git=None, state=None)  # type: ignore[arg-type]
 
         results = [
-            TestResult(test_name="test_x", test_file="tests/test_a.py", passed=True),
-            TestResult(test_name="test_y", test_file="tests/test_a.py", passed=False,
+            TaskTestResult(test_name="test_x", test_file="tests/test_a.py", passed=True),
+            TaskTestResult(test_name="test_y", test_file="tests/test_a.py", passed=False,
                        message="AssertionError"),
-            TestResult(test_name="test_z", test_file="tests/test_b.py", passed=False,
+            TaskTestResult(test_name="test_z", test_file="tests/test_b.py", passed=False,
                        message="ImportError"),
-            TestResult(test_name="test_w", test_file="unknown.py", passed=False,
+            TaskTestResult(test_name="test_w", test_file="unknown.py", passed=False,
                        message="Unknown"),
         ]
 
