@@ -147,7 +147,7 @@ class ShardTUI:
 
         return Panel(
             layout,
-            title=f"[bold]Shard v1.0.0[/bold]",
+            title="[bold]Shard v1.0.0rc2[/bold]",
             border_style="blue",
         )
 

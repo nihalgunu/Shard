@@ -10,7 +10,7 @@ from typing import Any
 import jsonschema
 import networkx as nx
 
-from shard.models import Collision, ExecutionGraph, RunConfig, TaskNode, TaskStatus
+from shard.models import Collision, ExecutionGraph, PlannerProvider, RunConfig, TaskNode, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -299,6 +299,90 @@ def parse_planner_response(response_json: dict[str, Any]) -> tuple[list[TaskNode
     return nodes, test_code
 
 
+import os
+
+
+class APIKeyError(Exception):
+    """Raised when an API key is missing or invalid."""
+    pass
+
+
+def _get_anthropic_client() -> Any:
+    """Get an Anthropic client, with helpful error if API key is missing."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise APIKeyError(
+            "ANTHROPIC_API_KEY environment variable is not set.\n\n"
+            "To fix this:\n"
+            "  1. Get your API key from https://console.anthropic.com/\n"
+            "  2. Run: export ANTHROPIC_API_KEY=sk-ant-...\n"
+            "  3. Try again\n\n"
+            "Or switch to OpenAI by setting planner_provider = 'openai' in shard.toml"
+        )
+    try:
+        import anthropic
+        return anthropic.AsyncAnthropic(api_key=api_key)
+    except ImportError:
+        raise APIKeyError(
+            "Anthropic package not installed.\n\n"
+            "To fix this:\n"
+            "  pip install anthropic\n\n"
+            "Or switch to OpenAI by setting planner_provider = 'openai' in shard.toml"
+        )
+
+
+def _get_openai_client() -> Any:
+    """Get an OpenAI client, with helpful error if API key is missing."""
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise APIKeyError(
+            "OPENAI_API_KEY environment variable is not set.\n\n"
+            "To fix this:\n"
+            "  1. Get your API key from https://platform.openai.com/api-keys\n"
+            "  2. Run: export OPENAI_API_KEY=sk-...\n"
+            "  3. Try again\n\n"
+            "Or switch to Anthropic by setting planner_provider = 'anthropic' in shard.toml"
+        )
+    try:
+        import openai
+        return openai.AsyncOpenAI(api_key=api_key)
+    except ImportError:
+        raise APIKeyError(
+            "OpenAI package not installed.\n\n"
+            "To fix this:\n"
+            "  pip install openai\n\n"
+            "Or switch to Anthropic by setting planner_provider = 'anthropic' in shard.toml"
+        )
+
+
+async def _call_anthropic(client: Any, model: str, temperature: float,
+                          system_prompt: str, user_message: str) -> str:
+    """Call Anthropic API and return response text."""
+    response = await client.messages.create(
+        model=model,
+        max_tokens=8192,
+        temperature=temperature,
+        system=system_prompt,
+        messages=[{"role": "user", "content": user_message}],
+    )
+    return response.content[0].text
+
+
+async def _call_openai(client: Any, model: str, temperature: float,
+                       system_prompt: str, user_message: str) -> str:
+    """Call OpenAI API and return response text."""
+    response = await client.chat.completions.create(
+        model=model,
+        max_tokens=8192,
+        temperature=temperature,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ],
+    )
+    return response.choices[0].message.content
+
+
 async def invoke_planner(
     prompt: str,
     repo_root: Path,
@@ -329,26 +413,37 @@ async def invoke_planner(
         f"## User Prompt\n{prompt}"
     )
 
-    if llm_client is None:
-        try:
-            import anthropic
-            llm_client = anthropic.AsyncAnthropic()
-        except ImportError:
-            raise RuntimeError(
-                "No LLM client provided and anthropic package not installed. "
-                "Install with: pip install anthropic"
-            )
+    # Set up provider-specific client and call function
+    model = config.planner_model
+
+    if llm_client is not None:
+        # Use provided client (assume Anthropic-style API)
+        call_fn = _call_anthropic
+        client = llm_client
+    elif config.planner_provider == PlannerProvider.OPENAI:
+        client = _get_openai_client()
+        call_fn = _call_openai
+        # Auto-fix model if it's an Anthropic model
+        if "claude" in model.lower():
+            model = "gpt-4o"
+            logger.info("Auto-switched model to gpt-4o for OpenAI provider")
+    else:  # Default to Anthropic
+        client = _get_anthropic_client()
+        call_fn = _call_anthropic
+        # Auto-fix model if it's an OpenAI model
+        if "gpt" in model.lower():
+            model = "claude-sonnet-4-20250514"
+            logger.info("Auto-switched model to claude-sonnet-4-20250514 for Anthropic provider")
 
     for attempt in range(config.max_replan_attempts + 1):
-        response = await llm_client.messages.create(
-            model=config.planner_model,
-            max_tokens=8192,
-            temperature=config.planner_temperature,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_message}],
+        response_text = await call_fn(
+            client,
+            model,
+            config.planner_temperature,
+            system_prompt,
+            user_message
         )
 
-        response_text = response.content[0].text
         # Extract JSON from response (may be wrapped in markdown code blocks)
         json_str = _extract_json(response_text)
         response_json = json.loads(json_str)

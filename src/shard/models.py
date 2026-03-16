@@ -40,6 +40,11 @@ class AgentBackend(str, enum.Enum):
     CUSTOM = "custom"
 
 
+class PlannerProvider(str, enum.Enum):
+    ANTHROPIC = "anthropic"
+    OPENAI = "openai"
+
+
 @dataclass
 class TokenUsage:
     prompt_tokens: int = 0
@@ -150,6 +155,7 @@ class RunConfig:
     worktree_dir: str = "../worktrees"
     branch_prefix: str = "wt"
     auto_cleanup: bool = True
+    planner_provider: PlannerProvider = PlannerProvider.ANTHROPIC
     planner_model: str = "claude-sonnet-4-20250514"
     planner_temperature: float = 0.2
     max_replan_attempts: int = 2
@@ -177,6 +183,7 @@ class RunConfig:
             "worktree_dir": self.worktree_dir,
             "branch_prefix": self.branch_prefix,
             "auto_cleanup": self.auto_cleanup,
+            "planner_provider": self.planner_provider.value,
             "planner_model": self.planner_model,
             "planner_temperature": self.planner_temperature,
             "max_replan_attempts": self.max_replan_attempts,
@@ -207,6 +214,7 @@ class RunConfig:
             worktree_dir=data.get("worktree_dir", "../worktrees"),
             branch_prefix=data.get("branch_prefix", "wt"),
             auto_cleanup=data.get("auto_cleanup", True),
+            planner_provider=PlannerProvider(data.get("planner_provider", "anthropic")),
             planner_model=data.get("planner_model", "claude-sonnet-4-20250514"),
             planner_temperature=data.get("planner_temperature", 0.2),
             max_replan_attempts=data.get("max_replan_attempts", 2),

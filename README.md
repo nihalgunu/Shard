@@ -100,6 +100,11 @@ binary = ""                 # Custom agent binary path (for custom backend)
 max_concurrent = 4          # Max parallel agents
 stagger_delay_s = 2.0       # Delay between agent launches
 
+[planner]
+provider = "anthropic"      # anthropic | openai
+model = "claude-sonnet-4-20250514"  # or "gpt-4o" for OpenAI
+temperature = 0.2
+
 [timeouts]
 per_task_s = 600            # Per-task timeout
 global_s = 3600             # Global timeout
@@ -127,6 +132,18 @@ json_report = true          # Use pytest-json-report for better parsing
 [logging]
 level = "INFO"              # DEBUG | INFO | WARNING | ERROR
 format = "json"             # json | text
+```
+
+### Environment Variables
+
+Set the API key for your chosen planner provider:
+
+```bash
+# For Anthropic (default)
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# For OpenAI
+export OPENAI_API_KEY=sk-...
 ```
 
 ## Why Git Worktrees?

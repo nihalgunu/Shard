@@ -47,7 +47,7 @@ def get_repo_root() -> Path:
 
 
 @click.group()
-@click.version_option(version="1.0.0rc1", prog_name="shard")
+@click.version_option(version="1.0.0rc2", prog_name="shard")
 def main() -> None:
     """Shard: A TDD-Driven, Parallelized AI Coding Orchestrator."""
     pass
@@ -59,10 +59,13 @@ def main() -> None:
 @click.option("--agents", "-n", type=int, default=None, help="Max concurrent agents (default: 4).")
 @click.option("--backend", type=click.Choice(["claude-code", "aider", "cursor-cli", "custom"]),
               default=None, help="Agent backend to use.")
+@click.option("--planner", type=click.Choice(["anthropic", "openai"]),
+              default=None, help="LLM provider for planning (default: anthropic).")
 @click.option("--timeout", type=int, default=None, help="Global timeout in seconds.")
 @click.option("--max-cost", type=float, default=None, help="Maximum cost in USD.")
 def run(prompt: str | None, prompt_file: str | None, agents: int | None,
-        backend: str | None, timeout: int | None, max_cost: float | None) -> None:
+        backend: str | None, planner: str | None, timeout: int | None,
+        max_cost: float | None) -> None:
     """Execute a full pipeline run."""
     if not prompt and not prompt_file:
         raise click.ClickException("Either --prompt or --prompt-file is required")
@@ -82,6 +85,9 @@ def run(prompt: str | None, prompt_file: str | None, agents: int | None,
     if backend is not None:
         from shard.models import AgentBackend
         config.agent_backend = AgentBackend(backend)
+    if planner is not None:
+        from shard.models import PlannerProvider
+        config.planner_provider = PlannerProvider(planner)
     if timeout is not None:
         config.global_timeout_s = timeout
     if max_cost is not None:
@@ -92,7 +98,19 @@ def run(prompt: str | None, prompt_file: str | None, agents: int | None,
     orchestrator = Orchestrator(repo_root, config)
     console.print(f"[bold]Shard[/bold] starting run [cyan]{orchestrator.run_id}[/cyan]")
 
-    graph = asyncio.run(orchestrator.run(prompt))
+    try:
+        graph = asyncio.run(orchestrator.run(prompt))
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted by user. Run 'shard resume' to continue.[/yellow]")
+        sys.exit(130)
+    except Exception as e:
+        # Import here to avoid circular imports
+        from shard.planner import APIKeyError
+        if isinstance(e, APIKeyError):
+            console.print(f"[bold red]API Key Error:[/bold red]\n{e}")
+        else:
+            console.print(f"[bold red]Error:[/bold red] {e}")
+        sys.exit(1)
 
     if graph.status == RunStatus.COMPLETED:
         console.print("[bold green]Pipeline completed successfully![/bold green]")
@@ -105,17 +123,31 @@ def run(prompt: str | None, prompt_file: str | None, agents: int | None,
 @main.command()
 @click.option("--prompt", "-p", required=True, help="Natural language prompt.")
 @click.option("--agents", "-n", type=int, default=None, help="Max concurrent agents.")
-def plan(prompt: str, agents: int | None) -> None:
+@click.option("--planner", type=click.Choice(["anthropic", "openai"]),
+              default=None, help="LLM provider for planning.")
+def plan(prompt: str, agents: int | None, planner: str | None) -> None:
     """Run only Stage 1: produce the DAG and test scaffold without executing."""
     repo_root = get_repo_root()
     config = load_config(repo_root)
     if agents is not None:
         config.max_agents = agents
+    if planner is not None:
+        from shard.models import PlannerProvider
+        config.planner_provider = PlannerProvider(planner)
 
     setup_logging(config.log_level, config.log_format)
 
     orchestrator = Orchestrator(repo_root, config)
-    graph = asyncio.run(orchestrator.run(prompt, plan_only=True))
+
+    try:
+        graph = asyncio.run(orchestrator.run(prompt, plan_only=True))
+    except Exception as e:
+        from shard.planner import APIKeyError
+        if isinstance(e, APIKeyError):
+            console.print(f"[bold red]API Key Error:[/bold red]\n{e}")
+        else:
+            console.print(f"[bold red]Error:[/bold red] {e}")
+        sys.exit(1)
 
     # Display the DAG
     table = Table(title=f"Execution Plan: {graph.run_id}")
@@ -151,7 +183,17 @@ def resume(run_id: str) -> None:
     orchestrator = Orchestrator(repo_root, config, run_id=run_id)
     console.print(f"[bold]Resuming run[/bold] [cyan]{run_id}[/cyan]")
 
-    graph = asyncio.run(orchestrator.resume())
+    try:
+        graph = asyncio.run(orchestrator.resume())
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted by user.[/yellow]")
+        sys.exit(130)
+    except FileNotFoundError:
+        console.print(f"[bold red]Error:[/bold red] Run '{run_id}' not found. Check .shard/ directory.")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        sys.exit(1)
 
     if graph.status == RunStatus.COMPLETED:
         console.print("[bold green]Run completed successfully![/bold green]")

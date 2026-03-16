@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "shard-code"
-version = "1.0.0rc1"
+version = "1.0.0rc2"
 description = "A TDD-Driven, Parallelized AI Coding Orchestrator"
 readme = "README.md"
 license = "Apache-2.0"
