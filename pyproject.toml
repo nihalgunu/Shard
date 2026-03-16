@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "shard-ai"
+name = "shard-code"
 version = "1.0.0rc1"
 description = "A TDD-Driven, Parallelized AI Coding Orchestrator"
 readme = "README.md"

@@ -14,7 +14,7 @@ brew install shard
 ### pip
 
 ```bash
-pip install shard-ai
+pip install shard-code
 ```
 
 ### From source
