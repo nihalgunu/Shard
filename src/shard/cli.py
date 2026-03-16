@@ -47,7 +47,7 @@ def get_repo_root() -> Path:
 
 
 @click.group()
-@click.version_option(version="1.0.0", prog_name="shard")
+@click.version_option(version="1.0.1", prog_name="shard")
 def main() -> None:
     """Shard: A TDD-Driven, Parallelized AI Coding Orchestrator."""
     pass
