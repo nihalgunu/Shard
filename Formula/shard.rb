@@ -3,8 +3,8 @@ class Shard < Formula
 
   desc "TDD-driven, parallelized AI coding orchestrator"
   homepage "https://github.com/nihalgunu/Shard"
-  url "https://github.com/nihalgunu/Shard/archive/refs/tags/v1.0.1.tar.gz"
-  sha256 "da221b6d81457fa8a8675d1190296e8ab1969e9f2a6fe9c6cccf08a1758e44fc"
+  url "https://github.com/nihalgunu/Shard/archive/refs/tags/v1.0.2.tar.gz"
+  sha256 "cecae7d41fe52adf768285285ef9d9cd05d43b205f8259d21d1801cdd2b6b603"
   license "Apache-2.0"
 
   depends_on "python@3.11"
