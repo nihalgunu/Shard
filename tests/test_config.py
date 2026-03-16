@@ -44,10 +44,6 @@ warn_usd = 5.00
 worktree_dir = "/tmp/worktrees"
 branch_prefix = "custom"
 
-[planner]
-model = "gpt-4"
-temperature = 0.1
-
 [test]
 runner = "pytest"
 args = ["-v", "--tb=long"]
@@ -65,7 +61,6 @@ format = "text"
         assert config.max_retries_per_task == 5
         assert config.max_cost_usd == 10.00
         assert config.branch_prefix == "custom"
-        assert config.planner_model == "gpt-4"
         assert config.log_level == "DEBUG"
 
 

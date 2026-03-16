@@ -10,7 +10,6 @@ from shard.models import (
     AgentBackend,
     Collision,
     ExecutionGraph,
-    PlannerProvider,
     RunConfig,
     RunStatus,
     TaskNode,
@@ -78,22 +77,11 @@ class TestTaskNode:
         assert restored.token_usage is None
 
 
-class TestPlannerProvider:
-    def test_values(self) -> None:
-        assert PlannerProvider.ANTHROPIC.value == "anthropic"
-        assert PlannerProvider.OPENAI.value == "openai"
-
-    def test_from_string(self) -> None:
-        assert PlannerProvider("anthropic") == PlannerProvider.ANTHROPIC
-        assert PlannerProvider("openai") == PlannerProvider.OPENAI
-
-
 class TestRunConfig:
     def test_defaults(self) -> None:
         cfg = RunConfig()
         assert cfg.max_agents == 4
         assert cfg.agent_backend == AgentBackend.CLAUDE_CODE
-        assert cfg.planner_provider == PlannerProvider.ANTHROPIC
         assert cfg.max_retries_per_task == 3
         assert cfg.max_retries_global == 5
         assert cfg.max_cost_usd == 5.00

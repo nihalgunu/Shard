@@ -80,9 +80,6 @@ def load_config(repo_root: Path) -> RunConfig:
             ("auto_cleanup", "auto_cleanup"),
         ],
         "planner": [
-            ("provider", "planner_provider"),
-            ("model", "planner_model"),
-            ("temperature", "planner_temperature"),
             ("max_replan_attempts", "max_replan_attempts"),
         ],
         "test": [
@@ -138,9 +135,6 @@ def save_config(repo_root: Path, config: RunConfig) -> None:
             "auto_cleanup": config.auto_cleanup,
         },
         "planner": {
-            "provider": config.planner_provider.value,
-            "model": config.planner_model,
-            "temperature": config.planner_temperature,
             "max_replan_attempts": config.max_replan_attempts,
         },
         "test": {

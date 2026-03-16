@@ -10,7 +10,7 @@ from typing import Any
 import jsonschema
 import networkx as nx
 
-from shard.models import Collision, ExecutionGraph, PlannerProvider, RunConfig, TaskNode, TaskStatus
+from shard.models import Collision, ExecutionGraph, RunConfig, TaskNode, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -299,103 +299,98 @@ def parse_planner_response(response_json: dict[str, Any]) -> tuple[list[TaskNode
     return nodes, test_code
 
 
-import os
+def _fix_json_newlines(json_str: str) -> str:
+    """Attempt to fix JSON with unescaped newlines in strings."""
+    result = []
+    in_string = False
+    escape_next = False
+
+    for ch in json_str:
+        if escape_next:
+            result.append(ch)
+            escape_next = False
+        elif ch == '\\':
+            result.append(ch)
+            escape_next = True
+        elif ch == '"':
+            result.append(ch)
+            in_string = not in_string
+        elif ch == '\n' and in_string:
+            result.append('\\n')
+        else:
+            result.append(ch)
+
+    return ''.join(result)
 
 
-class APIKeyError(Exception):
-    """Raised when an API key is missing or invalid."""
-    pass
+async def _call_cli(binary: str, system_prompt: str, user_message: str) -> str:
+    """Use the agent CLI for planning."""
+    import asyncio
+    import shutil
 
+    if not binary or binary == "claude":
+        binary = "claude"
 
-def _get_anthropic_client() -> Any:
-    """Get an Anthropic client, with helpful error if API key is missing."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise APIKeyError(
-            "ANTHROPIC_API_KEY environment variable is not set.\n\n"
-            "To fix this:\n"
-            "  1. Get your API key from https://console.anthropic.com/\n"
-            "  2. Run: export ANTHROPIC_API_KEY=sk-ant-...\n"
-            "  3. Try again\n\n"
-            "Or switch to OpenAI by setting planner_provider = 'openai' in shard.toml"
-        )
-    try:
-        import anthropic
-        return anthropic.AsyncAnthropic(api_key=api_key)
-    except ImportError:
-        raise APIKeyError(
-            "Anthropic package not installed.\n\n"
-            "To fix this:\n"
-            "  pip install anthropic\n\n"
-            "Or switch to OpenAI by setting planner_provider = 'openai' in shard.toml"
-        )
-
-
-def _get_openai_client() -> Any:
-    """Get an OpenAI client, with helpful error if API key is missing."""
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise APIKeyError(
-            "OPENAI_API_KEY environment variable is not set.\n\n"
-            "To fix this:\n"
-            "  1. Get your API key from https://platform.openai.com/api-keys\n"
-            "  2. Run: export OPENAI_API_KEY=sk-...\n"
-            "  3. Try again\n\n"
-            "Or switch to Anthropic by setting planner_provider = 'anthropic' in shard.toml"
-        )
-    try:
-        import openai
-        return openai.AsyncOpenAI(api_key=api_key)
-    except ImportError:
-        raise APIKeyError(
-            "OpenAI package not installed.\n\n"
-            "To fix this:\n"
-            "  pip install openai\n\n"
-            "Or switch to Anthropic by setting planner_provider = 'anthropic' in shard.toml"
+    if not shutil.which(binary):
+        raise RuntimeError(
+            f"CLI '{binary}' not found.\n\n"
+            "Install one of:\n"
+            "  Claude Code: npm install -g @anthropic-ai/claude-code\n"
+            "  Aider: pip install aider-chat"
         )
 
+    full_prompt = f"{system_prompt}\n\n{user_message}"
+    logger.info("Using CLI for planning: %s", binary)
 
-async def _call_anthropic(client: Any, model: str, temperature: float,
-                          system_prompt: str, user_message: str) -> str:
-    """Call Anthropic API and return response text."""
-    response = await client.messages.create(
-        model=model,
-        max_tokens=8192,
-        temperature=temperature,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_message}],
-    )
-    return response.content[0].text
+    if "claude" in binary:
+        cmd = [
+            binary,
+            "--print",
+            "--permission-mode", "bypassPermissions",
+            "--output-format", "text",
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate(input=full_prompt.encode())
+    elif "aider" in binary:
+        cmd = [binary, "--yes-always", "--no-auto-commits", "--message", full_prompt]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+    else:
+        cmd = [binary, "--print", full_prompt]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
 
+    if proc.returncode != 0:
+        error_msg = stderr.decode() if stderr else "Unknown error"
+        raise RuntimeError(f"CLI planning failed (exit {proc.returncode}): {error_msg}")
 
-async def _call_openai(client: Any, model: str, temperature: float,
-                       system_prompt: str, user_message: str) -> str:
-    """Call OpenAI API and return response text."""
-    response = await client.chat.completions.create(
-        model=model,
-        max_tokens=8192,
-        temperature=temperature,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message},
-        ],
-    )
-    return response.choices[0].message.content
+    return stdout.decode()
 
 
 async def invoke_planner(
     prompt: str,
     repo_root: Path,
     config: RunConfig,
-    llm_client: Any = None,
 ) -> tuple[list[TaskNode], dict[str, str]]:
-    """Invoke the planner LLM to generate the execution DAG.
+    """Invoke the planner via CLI to generate the execution DAG.
 
     Args:
         prompt: User's natural language prompt.
         repo_root: Path to the repository root.
         config: Run configuration.
-        llm_client: Optional pre-configured LLM client. If None, creates one.
 
     Returns:
         Tuple of (task nodes, test code dict).
@@ -413,40 +408,25 @@ async def invoke_planner(
         f"## User Prompt\n{prompt}"
     )
 
-    # Set up provider-specific client and call function
-    model = config.planner_model
-
-    if llm_client is not None:
-        # Use provided client (assume Anthropic-style API)
-        call_fn = _call_anthropic
-        client = llm_client
-    elif config.planner_provider == PlannerProvider.OPENAI:
-        client = _get_openai_client()
-        call_fn = _call_openai
-        # Auto-fix model if it's an Anthropic model
-        if "claude" in model.lower():
-            model = "gpt-4o"
-            logger.info("Auto-switched model to gpt-4o for OpenAI provider")
-    else:  # Default to Anthropic
-        client = _get_anthropic_client()
-        call_fn = _call_anthropic
-        # Auto-fix model if it's an OpenAI model
-        if "gpt" in model.lower():
-            model = "claude-sonnet-4-20250514"
-            logger.info("Auto-switched model to claude-sonnet-4-20250514 for Anthropic provider")
-
     for attempt in range(config.max_replan_attempts + 1):
-        response_text = await call_fn(
-            client,
-            model,
-            config.planner_temperature,
-            system_prompt,
-            user_message
-        )
+        response_text = await _call_cli(config.agent_binary, system_prompt, user_message)
 
         # Extract JSON from response (may be wrapped in markdown code blocks)
         json_str = _extract_json(response_text)
-        response_json = json.loads(json_str)
+
+        try:
+            response_json = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            # Try to fix common JSON issues
+            try:
+                fixed_json = _fix_json_newlines(json_str)
+                response_json = json.loads(fixed_json)
+            except json.JSONDecodeError:
+                if attempt < config.max_replan_attempts:
+                    user_message += f"\n\n## JSON Parse Error\n{e}\nPlease output valid JSON only."
+                    logger.warning("Planner attempt %d failed with JSON error: %s", attempt + 1, e)
+                    continue
+                raise ValueError(f"Invalid JSON from planner: {e}")
 
         try:
             nodes, test_code = parse_planner_response(response_json)

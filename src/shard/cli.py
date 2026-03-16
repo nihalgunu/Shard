@@ -47,7 +47,7 @@ def get_repo_root() -> Path:
 
 
 @click.group()
-@click.version_option(version="1.0.0rc2", prog_name="shard")
+@click.version_option(version="1.0.0", prog_name="shard")
 def main() -> None:
     """Shard: A TDD-Driven, Parallelized AI Coding Orchestrator."""
     pass
@@ -57,14 +57,12 @@ def main() -> None:
 @click.option("--prompt", "-p", help="Natural language prompt describing the task.")
 @click.option("--prompt-file", "-f", type=click.Path(exists=True), help="Read prompt from file.")
 @click.option("--agents", "-n", type=int, default=None, help="Max concurrent agents (default: 4).")
-@click.option("--backend", type=click.Choice(["claude-code", "aider", "cursor-cli", "custom"]),
+@click.option("--backend", type=click.Choice(["claude-code", "aider", "codex", "gemini", "cursor-cli", "custom"]),
               default=None, help="Agent backend to use.")
-@click.option("--planner", type=click.Choice(["anthropic", "openai"]),
-              default=None, help="LLM provider for planning (default: anthropic).")
 @click.option("--timeout", type=int, default=None, help="Global timeout in seconds.")
 @click.option("--max-cost", type=float, default=None, help="Maximum cost in USD.")
 def run(prompt: str | None, prompt_file: str | None, agents: int | None,
-        backend: str | None, planner: str | None, timeout: int | None,
+        backend: str | None, timeout: int | None,
         max_cost: float | None) -> None:
     """Execute a full pipeline run."""
     if not prompt and not prompt_file:
@@ -85,9 +83,6 @@ def run(prompt: str | None, prompt_file: str | None, agents: int | None,
     if backend is not None:
         from shard.models import AgentBackend
         config.agent_backend = AgentBackend(backend)
-    if planner is not None:
-        from shard.models import PlannerProvider
-        config.planner_provider = PlannerProvider(planner)
     if timeout is not None:
         config.global_timeout_s = timeout
     if max_cost is not None:
@@ -104,12 +99,7 @@ def run(prompt: str | None, prompt_file: str | None, agents: int | None,
         console.print("\n[yellow]Interrupted by user. Run 'shard resume' to continue.[/yellow]")
         sys.exit(130)
     except Exception as e:
-        # Import here to avoid circular imports
-        from shard.planner import APIKeyError
-        if isinstance(e, APIKeyError):
-            console.print(f"[bold red]API Key Error:[/bold red]\n{e}")
-        else:
-            console.print(f"[bold red]Error:[/bold red] {e}")
+        console.print(f"[bold red]Error:[/bold red] {e}")
         sys.exit(1)
 
     if graph.status == RunStatus.COMPLETED:
@@ -123,17 +113,12 @@ def run(prompt: str | None, prompt_file: str | None, agents: int | None,
 @main.command()
 @click.option("--prompt", "-p", required=True, help="Natural language prompt.")
 @click.option("--agents", "-n", type=int, default=None, help="Max concurrent agents.")
-@click.option("--planner", type=click.Choice(["anthropic", "openai"]),
-              default=None, help="LLM provider for planning.")
-def plan(prompt: str, agents: int | None, planner: str | None) -> None:
+def plan(prompt: str, agents: int | None) -> None:
     """Run only Stage 1: produce the DAG and test scaffold without executing."""
     repo_root = get_repo_root()
     config = load_config(repo_root)
     if agents is not None:
         config.max_agents = agents
-    if planner is not None:
-        from shard.models import PlannerProvider
-        config.planner_provider = PlannerProvider(planner)
 
     setup_logging(config.log_level, config.log_format)
 
@@ -142,11 +127,7 @@ def plan(prompt: str, agents: int | None, planner: str | None) -> None:
     try:
         graph = asyncio.run(orchestrator.run(prompt, plan_only=True))
     except Exception as e:
-        from shard.planner import APIKeyError
-        if isinstance(e, APIKeyError):
-            console.print(f"[bold red]API Key Error:[/bold red]\n{e}")
-        else:
-            console.print(f"[bold red]Error:[/bold red] {e}")
+        console.print(f"[bold red]Error:[/bold red] {e}")
         sys.exit(1)
 
     # Display the DAG

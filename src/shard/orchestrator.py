@@ -5,9 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any
 
-import ulid
+import uuid
 
 from shard.aggregator import Aggregator, SelfHealingLoop
 from shard.config import load_config
@@ -41,12 +40,10 @@ class Orchestrator:
         repo_root: Path,
         config: RunConfig | None = None,
         run_id: str | None = None,
-        llm_client: Any = None,
     ) -> None:
         self.repo_root = repo_root.resolve()
         self.config = config or load_config(self.repo_root)
-        self.run_id = run_id or f"wt-{ulid.new().str.lower()}"
-        self.llm_client = llm_client
+        self.run_id = run_id or f"wt-{uuid.uuid4().hex[:16]}"
 
         self.state = StateManager(self.repo_root, self.run_id)
         self.git = GitManager(self.repo_root, self.config.worktree_dir)
@@ -190,7 +187,7 @@ class Orchestrator:
 
         logger.info("Stage 1: Planning - generating execution DAG")
         nodes, test_code = await invoke_planner(
-            prompt, self.repo_root, self.config, self.llm_client
+            prompt, self.repo_root, self.config
         )
 
         self.graph.nodes = nodes
